@@ -233,8 +233,33 @@ async def update_task(task_id: int, updates: TaskUpdate) -> Task:
 
     Indice: Regardez comment create_task fonctionne pour vous inspirer
     """
-    # TODO: Votre code ici
-    raise HTTPException(status_code=501, detail="Update not implemented yet - complete this function!")
+    
+    if task_id not in tasks_db:
+        raise HTTPException(status_code=501, detail="Update not implemented yet - complete this function!")
+
+    task = tasks_db[task_id]
+
+    champs=updates.model_dump(exclude_unset=True)
+    print(champs)
+    # Create new task with auto-generated ID
+    
+    now = datetime.utcnow()
+
+    new_task = Task(
+        id=task.id,
+        title=champs.get("title",task.title),
+        description=champs.get("description",task.description),
+        status=champs.get( "status",task.status),
+        priority=champs.get("priority",task.priority),
+        assignee=champs.get("assignee",task.assignee),
+        due_date=champs.get("due_date",task.due_date),
+        created_at=task.created_at,
+        updated_at=now
+    )
+
+    tasks_db[task_id] = new_task
+    return new_task
+    
 
 
 @app.delete("/tasks/{task_id}", status_code=204)

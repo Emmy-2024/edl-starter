@@ -129,9 +129,27 @@ def test_delete_task(client):
 
     Astuce : Regardez test_get_task_by_id pour voir comment créer et obtenir l'ID
     """
-    # TODO : Écrivez votre test ici !
-    pass
+    #Arrange
+    create_response = client.post("/tasks", json={"title": "Trouve-moi"})
+    task_id = create_response.json()["id"]
+    #Act
+  
+    response_delete=client.delete(f"/tasks/{task_id}")
+    response_get = client.get(f"/tasks/{task_id}")
+    #Assert
+    assert response_delete.status_code==204
+    assert response_get.status_code==404
+    
 
+def test_delete_nonexistent_task_returns_404(client):
+    """Deleting a task that doesn't exist should return 404."""
+    # TODO: Votre code ici
+    # 1. Essayer de supprimer une tâche avec un ID qui n'existe pas (ex: 9999)
+    # 2. Vérifier que ça retourne 404
+    # 3. Vérifier le message d'erreur contient "not found"
+    response_delete=client.delete(f"/tasks/{9999}")
+    assert response_delete.status_code==404
+    assert "not found" in response_delete.json()["detail"]
 
 # EXERCICE 2 : Écrire un test pour METTRE À JOUR une tâche
 # Pattern : Créer → Mettre à jour → Vérifier les changements
@@ -148,23 +166,18 @@ def test_update_task(client):
 
     Astuce : Les requêtes PUT sont comme les POST, mais elles modifient des données existantes
     """
-    # TODO : Écrivez votre test ici !
-    pass
+    #Arrange
+    my_task=dict()
+    my_task["title"]="Original"
+    create_response = client.post("/tasks", json=my_task)
+    #Act
+    task_id = create_response.json()["id"]
+    response=client.put(f"/tasks/{task_id}", json={"title": "Nouveau Titre"})
 
+    #Assert
+    assert response.status_code == 200
+    assert response.json()["title"] == "Nouveau Titre"
 
-# EXERCICE 3 : Tester la validation - un titre vide devrait échouer
-def test_create_task_empty_title(client):
-    """
-    VOTRE TÂCHE : Tester que créer une tâche avec un titre vide échoue.
-
-    Étapes :
-    1. Essayer de créer une tâche avec title = ""
-    2. Vérifier que le code de statut est 422 (Erreur de Validation)
-
-    Astuce : Regardez test_create_task, mais attendez-vous à un échec !
-    """
-    # TODO : Écrivez votre test ici !
-    pass
 
 
 # EXERCICE 4 : Tester la validation - priorité invalide
@@ -179,8 +192,10 @@ def test_update_task_with_invalid_priority(client):
 
     Rappel : Les priorités valides sont "low", "medium", "high" (voir TaskPriority dans app.py)
     """
-    # TODO : Écrivez votre test ici !
-    pass
+    create_response = client.post("/tasks", json={"title": "Trouve-moi"})
+    task_id = create_response.json()["id"]
+    response=client.put(f"/tasks/{task_id}", json={"priority": "urgent"})
+    assert response.status_code == 422
 
 
 # EXERCICE 5 : Tester l'erreur 404
