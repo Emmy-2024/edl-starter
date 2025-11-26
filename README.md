@@ -1,3 +1,6 @@
+# TaskFlow API
+![Backend Tests](https://github.com/Emmy-2024/edl-starter/actions/workflows/backend.yml/badge.svg)
+
 # 🚀 EDL Starter - Code de Démarrage
 
 Bienvenue dans le code de démarrage pour les ateliers d'Environnement de Développement Logiciel (EDL) !
