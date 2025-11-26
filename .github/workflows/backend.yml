@@ -21,8 +21,8 @@ steps:
 # TODO : Installez les dépendances (cd backend && uv sync)
 - name: Installez dépendances
   run: |
-  cd backend
-  uv sync
+    cd backend
+    uv sync
 # TODO : Lancez les tests
 - name: Mon étape
 run: |
