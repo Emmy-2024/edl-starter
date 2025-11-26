@@ -26,6 +26,6 @@ steps:
 # TODO : Lancez les tests
 - name: Mon étape
 run: |
-cd tests/
-python3 test_api.py
+  cd tests/
+  python3 test_api.py
 
