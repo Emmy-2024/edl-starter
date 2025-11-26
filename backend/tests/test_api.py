@@ -197,6 +197,10 @@ def test_update_task_with_invalid_priority(client):
     response=client.put(f"/tasks/{task_id}", json={"priority": "urgent"})
     assert response.status_code == 422
 
+def test_health_check(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "BROKEN" # Faux exprès !
 
 # EXERCICE 5 : Tester l'erreur 404
 def test_get_nonexistent_task(client):
@@ -257,6 +261,8 @@ def test_task_lifecycle(client):
     """
     # TODO : Écrivez votre test ici !
     pass
+
+
 
 
 # =============================================================================
