@@ -16,5 +16,5 @@ jobs:
     needs: [backend, frontend]
     runs-on: ubuntu-latest
   steps:
-    - name: 🎉 Success
-      run: echo "🎉 Tous les tests sont passés !
+    - name:  Success
+      run: echo " Tous les tests sont passés !
