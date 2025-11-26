@@ -15,6 +15,6 @@ jobs:
     name: All Tests Passed
     needs: [backend, frontend]
     runs-on: ubuntu-latest
-  steps:
-    - name:  Success
-      run: echo " Tous les tests sont passés !
+    steps:
+      - name:  Success
+        run: echo " Tous les tests sont passés !
