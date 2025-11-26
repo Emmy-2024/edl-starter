@@ -25,6 +25,6 @@ jobs:
     # TODO : Lancez les tests
     - name: Mon étape
       run: |
-        cd tests/
+        cd backend/tests/
         python3 test_api.py
 
