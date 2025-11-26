@@ -17,12 +17,12 @@ steps:
     cache: 'pip' # caching pip dependencies
 # TODO : Installez UV avec pip
 - name: Installez UV
-run: pip install uv
+  run: pip install uv
 # TODO : Installez les dépendances (cd backend && uv sync)
 - name: Installez dépendances
-run : |
-cd backend
-uv sync
+  run: |
+  cd backend
+  uv sync
 # TODO : Lancez les tests
 - name: Mon étape
 run: |
