@@ -25,6 +25,7 @@ jobs:
     # TODO : Lancez les tests
     - name: Mon étape
       run: |
-        cd backend/tests/
-        python3 test_api.py
+        cd backend/
+        uv run pytest -v --cov
+        
 
