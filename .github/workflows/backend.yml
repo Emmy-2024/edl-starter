@@ -26,9 +26,8 @@ jobs:
         cd backend
         uv sync
     # TODO : Lancez les tests
-    - name: Mon étape
+    - name: tests unitaires
       run: |
         cd backend/
         uv run pytest -v --cov
         
-
