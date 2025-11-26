@@ -22,4 +22,11 @@ on:
           cd frontend
           npm ci
       # TODO : Lancez les tests
+      - name : tests
+        run : |
+          cd frontend
+          npm test -- --run
       # TODO : Vérifiez le build
+      - name : build
+        run : npm run build 
+
