@@ -14,6 +14,17 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import logging
 
+from contextlib import asynccontextmanager
+import uuid
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from .database import get_db, init_db
+from .models import TaskModel, TaskStatus, TaskPriority
+
+from fastapi.middleware.cors import CORSMiddleware
+import os
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -25,19 +36,6 @@ logger = logging.getLogger("taskflow")
 # =============================================================================
 # ENUMS & MODELS
 # =============================================================================
-
-class TaskStatus(str, Enum):
-    """Task status enum - simpler than SQLAlchemy version."""
-    TODO = "todo"
-    IN_PROGRESS = "in_progress"
-    DONE = "done"
-
-
-class TaskPriority(str, Enum):
-    """Task priority enum - simpler than SQLAlchemy version."""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
 
 
 class TaskCreate(BaseModel):
@@ -60,11 +58,19 @@ class TaskUpdate(BaseModel):
     due_date: Optional[datetime] = None
 
 
-class Task(TaskCreate):
-    """Model for a task with ID and timestamps."""
-    id: int  # Integer ID instead of UUID string - simpler!
+class Task(BaseModel):
+    """Model for task response."""
+    id: str # ← Changé en str pour UUID
+    title: str
+    description: Optional[str] = None
+    status: TaskStatus
+    priority: TaskPriority
+    assignee: Optional[str] = None
+    due_date: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+class Config:
+    from_attributes = True 
 
 
 # =============================================================================
@@ -73,28 +79,20 @@ class Task(TaskCreate):
 
 # Simple dictionary to store tasks
 # In Atelier 3, this will be replaced with PostgreSQL database
-tasks_db: Dict[int, Task] = {}
-next_id = 1
-
-
-def get_next_id() -> int:
-    """Get next available task ID."""
-    global next_id
-    current_id = next_id
-    next_id += 1
-    return current_id
-
-
-def clear_tasks():
-    """Clear all tasks - useful for testing."""
-    global tasks_db, next_id
-    tasks_db = {}
-    next_id = 1
 
 
 # =============================================================================
 # FASTAPI APP
 # =============================================================================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle manager - initialise la DB au démarrage."""
+    logger.info(" TaskFlow backend starting up...")
+    init_db() # Crée les tables
+    logger.info(" Database initialized")
+    yield
+    logger.info(" TaskFlow backend shutting down...")
 
 app = FastAPI(
     title="TaskFlow API",
@@ -102,21 +100,19 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
-
-@app.on_event("startup")
-def startup():
-    """Simple startup - just log a message."""
-    logger.info("🚀 TaskFlow backend starting up...")
-    logger.info("Using in-memory storage (no database)")
-
-
-@app.on_event("shutdown")
-def shutdown():
-    """Simple shutdown - just log a message."""
-    logger.info("🛑 TaskFlow backend shutting down...")
-
+# Configuration CORS pour le frontend
+cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:5173")
+cors_origins = [origin.strip() for origin in cors_origins_str.split(",")]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # =============================================================================
 # ENDPOINTS
@@ -133,63 +129,58 @@ async def root():
 
 
 @app.get("/health")
-async def health_check():
-    """Simple health check endpoint."""
-    return {
-        "status": "healthy",
-        "tasks_count": len(tasks_db)
-    }
+async def health_check(db: Session = Depends(get_db)):
+    """Health check with database status."""
+    try:
+        db.execute(text("SELECT 1"))
+        tasks_count = db.query(TaskModel).count()
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "tasks_count": tasks_count
+        }
+    except Exception as e:
+        return {"status": "unhealthy", "database": str(e)}
+
 
 
 @app.get("/tasks", response_model=List[Task])
 async def get_tasks(
     status: Optional[TaskStatus] = None,
     priority: Optional[TaskPriority] = None,
-    assignee: Optional[str] = None
-) -> List[Task]:
-    """
-    Get all tasks with optional filtering.
-
-    Query parameters:
-    - status: Filter by task status (todo, in_progress, done)
-    - priority: Filter by priority (low, medium, high)
-    - assignee: Filter by assignee email
-    """
-    tasks = list(tasks_db.values())
-
-    # Apply filters
+    assignee: Optional[str] = None,
+    db: Session = Depends(get_db) # ← Toujours en dernier dans les param
+):
+    """Get all tasks with optional filtering."""
+    query = db.query(TaskModel)
     if status:
-        tasks = [t for t in tasks if t.status == status]
+        query = query.filter(TaskModel.status == status)
     if priority:
-        tasks = [t for t in tasks if t.priority == priority]
+        query = query.filter(TaskModel.priority == priority)
     if assignee:
-        tasks = [t for t in tasks if t.assignee == assignee]
-
-    return tasks
-
+        query = query.filter(TaskModel.assignee == assignee)
+    return db.query(TaskModel).all()      #query.all()
 
 @app.get("/tasks/{task_id}", response_model=Task)
-async def get_task(task_id: int) -> Task:
+async def get_task(task_id: str, db: Session = Depends(get_db)) -> Task:
     """Get a single task by ID."""
-    if task_id not in tasks_db:
+    result=db.query(TaskModel).filter(TaskModel.id ==task_id).first()
+    if result is None:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return tasks_db[task_id]
+    return result
 
 
 @app.post("/tasks", response_model=Task, status_code=201)
-async def create_task(task_data: TaskCreate) -> Task:
+async def create_task(task_data: TaskCreate,db: Session = Depends(get_db)) -> Task:
     """Create a new task."""
     # Validate title is not empty
     if not task_data.title or not task_data.title.strip():
         raise HTTPException(status_code=422, detail="Title cannot be empty")
 
     # Create new task with auto-generated ID
-    task_id = get_next_id()
     now = datetime.utcnow()
 
-    task = Task(
-        id=task_id,
-        title=task_data.title,
+    task=TaskModel(id=str(uuid.uuid4()),title=task_data.title,
         description=task_data.description,
         status=task_data.status,
         priority=task_data.priority,
@@ -198,14 +189,16 @@ async def create_task(task_data: TaskCreate) -> Task:
         created_at=now,
         updated_at=now
     )
-
-    tasks_db[task_id] = task
-    logger.info(f"Task created successfully: {task_id}")
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+     #tasks_db[task_id] = task
+    logger.info(f"Task created successfully: {task.id}")
     return task
 
 
 @app.put("/tasks/{task_id}", response_model=Task)
-async def update_task(task_id: int, updates: TaskUpdate) -> Task:
+async def update_task(task_id: str, updates: TaskUpdate, db: Session = Depends(get_db)) -> Task:
     """
     Update an existing task (partial update supported).
 
@@ -233,11 +226,6 @@ async def update_task(task_id: int, updates: TaskUpdate) -> Task:
 
     Indice: Regardez comment create_task fonctionne pour vous inspirer
     """
-    
-    if task_id not in tasks_db:
-        raise HTTPException(status_code=501, detail="Update not implemented yet - complete this function!")
-
-    task = tasks_db[task_id]
 
     champs=updates.model_dump(exclude_unset=True)
     print(champs)
@@ -245,25 +233,27 @@ async def update_task(task_id: int, updates: TaskUpdate) -> Task:
     
     now = datetime.utcnow()
 
-    new_task = Task(
-        id=task.id,
-        title=champs.get("title",task.title),
-        description=champs.get("description",task.description),
-        status=champs.get( "status",task.status),
-        priority=champs.get("priority",task.priority),
-        assignee=champs.get("assignee",task.assignee),
-        due_date=champs.get("due_date",task.due_date),
-        created_at=task.created_at,
-        updated_at=now
-    )
 
-    tasks_db[task_id] = new_task
-    return new_task
+    task=db.query(TaskModel).filter(TaskModel.id ==task_id).first()
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+    setattr(task, "title", updates.title)
+    setattr(task, "description", updates.description)
+    setattr(task, "status", updates.status)
+    setattr(task, "priority", updates.priority)
+    setattr(task, "due_date", updates.due_date)
+    setattr(task, "assignee", updates.assignee)
+    setattr(task, "update_at", now)
+    
+    db.commit()
+    db.refresh(task)
+    return task
     
 
 
 @app.delete("/tasks/{task_id}", status_code=204)
-async def delete_task(task_id: int):
+async def delete_task(task_id: str, db: Session = Depends(get_db)):
     """
     Delete a task by ID.
 
@@ -280,10 +270,13 @@ async def delete_task(task_id: int):
 
     Indice: C'est très simple, seulement 3 lignes de code !
     """
-    if task_id not in tasks_db:
+    task=db.query(TaskModel).filter(TaskModel.id ==task_id).first()
+    if task is None:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-
-    del tasks_db[task_id]
+        
+    db.delete(task)
+    db.commit()
+    #del tasks_db[task_id]
     return None
 
 if __name__ == "__main__":
